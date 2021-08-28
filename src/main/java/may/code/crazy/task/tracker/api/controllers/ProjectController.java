@@ -3,10 +3,10 @@ package may.code.crazy.task.tracker.api.controllers;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import may.code.crazy.task.tracker.api.controllers.helpers.ControllerHelper;
 import may.code.crazy.task.tracker.api.dto.AckDto;
 import may.code.crazy.task.tracker.api.dto.ProjectDto;
 import may.code.crazy.task.tracker.api.exceptions.BadRequestException;
-import may.code.crazy.task.tracker.api.exceptions.NotFoundException;
 import may.code.crazy.task.tracker.api.factories.ProjectDtoFactory;
 import may.code.crazy.task.tracker.store.entities.ProjectEntity;
 import may.code.crazy.task.tracker.store.repositories.ProjectRepository;
@@ -29,10 +29,11 @@ public class ProjectController {
 
     ProjectDtoFactory projectDtoFactory;
 
-    public static final String FETCH_PROJECTS = "/api/projects";
-    public static final String DELETE_PROJECT = "/api/projects/{project_id}";
+    ControllerHelper controllerHelper;
 
+    public static final String FETCH_PROJECTS = "/api/projects";
     public static final String CREATE_OR_UPDATE_PROJECT = "/api/projects";
+    public static final String DELETE_PROJECT = "/api/projects/{project_id}";
 
     @GetMapping(FETCH_PROJECTS)
     public List<ProjectDto> fetchProjects(
@@ -42,7 +43,7 @@ public class ProjectController {
 
         Stream<ProjectEntity> projectStream = optionalPrefixName
                 .map(projectRepository::streamAllByNameStartsWithIgnoreCase)
-                .orElseGet(projectRepository::streamAll);
+                .orElseGet(projectRepository::streamAllBy);
 
         return projectStream
                 .map(projectDtoFactory::makeProjectDto)
@@ -52,9 +53,7 @@ public class ProjectController {
     @PutMapping(CREATE_OR_UPDATE_PROJECT)
     public ProjectDto createOrUpdateProject(
             @RequestParam(value = "project_id", required = false) Optional<Long> optionalProjectId,
-            @RequestParam(value = "project_name", required = false) Optional<String> optionalProjectName
-            // Another params...
-            ) {
+            @RequestParam(value = "project_name", required = false) Optional<String> optionalProjectName) {
 
         optionalProjectName = optionalProjectName.filter(projectName -> !projectName.trim().isEmpty());
 
@@ -65,7 +64,7 @@ public class ProjectController {
         }
 
         final ProjectEntity project = optionalProjectId
-                .map(this::getProjectOrThrowException)
+                .map(controllerHelper::getProjectOrThrowException)
                 .orElseGet(() -> ProjectEntity.builder().build());
 
         optionalProjectName
@@ -91,24 +90,10 @@ public class ProjectController {
     @DeleteMapping(DELETE_PROJECT)
     public AckDto deleteProject(@PathVariable("project_id") Long projectId) {
 
-        getProjectOrThrowException(projectId);
+        controllerHelper.getProjectOrThrowException(projectId);
 
         projectRepository.deleteById(projectId);
 
         return AckDto.makeDefault(true);
-    }
-
-    private ProjectEntity getProjectOrThrowException(Long projectId) {
-
-        return projectRepository
-                .findById(projectId)
-                .orElseThrow(() ->
-                        new NotFoundException(
-                                String.format(
-                                        "Project with \"%s\" doesn't exist.",
-                                        projectId
-                                )
-                        )
-                );
     }
 }
